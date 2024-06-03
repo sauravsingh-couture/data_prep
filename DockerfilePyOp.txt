@@ -1,0 +1,20 @@
+# Use an existing Jupyter Server Spawner Docker image as the base
+FROM --platform=linux/amd64 couture/jupyter-server-spawner:python-docker-operator-latest
+
+# Switch to root user for installing packages
+USER root
+
+ENV  http_proxy=http://127.0.0.1:3128
+ENV  https_proxy=http://127.0.0.1:3128
+ENV  no_proxy=localhost,127.0.0.0,127.0.1.1,127.0.1.1,local.home,127.0.0.1,assets.ajio.com
+
+
+# Copy the requirements file and install additional Python packages using pip
+COPY requirements.txt requirements.txt
+RUN pip3 install -r requirements.txt
+
+# Install necessary NLTK data
+RUN python3 -c "import nltk; nltk.download('stopwords'); nltk.download('omw-1.4'); nltk.download('wordnet')"
+
+# Switch back to jovyan user
+USER jovyan
