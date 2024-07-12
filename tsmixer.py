@@ -30,10 +30,10 @@ import matplotlib.pyplot as plt
 from pathlib import Path 
 import pickle
 import shutil
-# import pyarrow as pa
-# import pyarrow.hdfs as hdfs
-# import pyarrow.parquet as pq
-# fs = pa.hdfs.connect()
+import pyarrow as pa
+import pyarrow.hdfs as hdfs
+import pyarrow.parquet as pq
+fs = pa.hdfs.connect()
 
 
 def give_previous_date(date, week_delta):
@@ -62,12 +62,12 @@ def split_series(series, train_start: str, train_end: str, test_start: str, test
         
     return train, test
 
-def loading_training_predictions(input_chunk_length, output_chunk_length, full_training, model_name, data_version, exp_name, base_input_dir, hdfs_input_dir):
+def loading_training_predictions(input_chunk_length, output_chunk_length, full_training, model_name, data_version, exp_name, base_input_dir, hdfs_input_dir, bucket_name):
     use_static_covariates = False
     # max_samples_per_ts = 14
     num_loader_workers = 32
 
-    input_dir = base_input_dir / f"dataset/version={data_version}"
+    input_dir = base_input_dir / f"dataset/version={data_version}/bucket={bucket_name}/"
     output_dir = input_dir / "experiments" / exp_name
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -249,14 +249,57 @@ def loading_training_predictions(input_chunk_length, output_chunk_length, full_t
     predicted_df.to_csv(f"{work_dir}/result.csv", index=False)
 
 
-input_chunk_length = 52
+input_chunk_length = 13
 output_chunk_length = 13
-
 model_name="TSMixer"
-data_version = "3.0"
+data_version = "4.0"
+bucket_name = "0"
 exp_name = f"TSMixerModel_icl={input_chunk_length}"
-
 base_input_dir = Path("/app/notebooks/Saurav/electronics/DL_exp/")
-hdfs_input_dir = f"/data/Archive/Saurav/digital/phase1/forecasting_data/version={data_version}/"
+hdfs_input_dir = f"/data/Archive/Saurav/digital/phase1/forecasting_data/version={data_version}/bucket={bucket_name}/"
 loading_training_predictions(input_chunk_length=input_chunk_length, output_chunk_length=output_chunk_length, full_training=True, model_name=model_name, data_version=data_version, exp_name=exp_name, base_input_dir=base_input_dir,
-                             hdfs_input_dir=hdfs_input_dir)
+                             hdfs_input_dir=hdfs_input_dir, bucket_name=bucket_name)
+
+input_chunk_length = 13
+output_chunk_length = 13
+model_name="TSMixer"
+data_version = "4.0"
+bucket_name = "1-3"
+exp_name = f"TSMixerModel_icl={input_chunk_length}"
+base_input_dir = Path("/app/notebooks/Saurav/electronics/DL_exp/")
+hdfs_input_dir = f"/data/Archive/Saurav/digital/phase1/forecasting_data/version={data_version}/bucket={bucket_name}/"
+loading_training_predictions(input_chunk_length=input_chunk_length, output_chunk_length=output_chunk_length, full_training=True, model_name=model_name, data_version=data_version, exp_name=exp_name, base_input_dir=base_input_dir,
+                             hdfs_input_dir=hdfs_input_dir, bucket_name=bucket_name)
+
+input_chunk_length = 13
+output_chunk_length = 13
+model_name="TSMixer"
+data_version = "4.0"
+bucket_name = "4-10"
+exp_name = f"TSMixerModel_icl={input_chunk_length}"
+base_input_dir = Path("/app/notebooks/Saurav/electronics/DL_exp/")
+hdfs_input_dir = f"/data/Archive/Saurav/digital/phase1/forecasting_data/version={data_version}/bucket={bucket_name}/"
+loading_training_predictions(input_chunk_length=input_chunk_length, output_chunk_length=output_chunk_length, full_training=True, model_name=model_name, data_version=data_version, exp_name=exp_name, base_input_dir=base_input_dir,
+                             hdfs_input_dir=hdfs_input_dir, bucket_name=bucket_name)
+
+input_chunk_length = 13
+output_chunk_length = 13
+model_name="TSMixer"
+data_version = "4.0"
+bucket_name = "11-20"
+exp_name = f"TSMixerModel_icl={input_chunk_length}"
+base_input_dir = Path("/app/notebooks/Saurav/electronics/DL_exp/")
+hdfs_input_dir = f"/data/Archive/Saurav/digital/phase1/forecasting_data/version={data_version}/bucket={bucket_name}/"
+loading_training_predictions(input_chunk_length=input_chunk_length, output_chunk_length=output_chunk_length, full_training=True, model_name=model_name, data_version=data_version, exp_name=exp_name, base_input_dir=base_input_dir,
+                             hdfs_input_dir=hdfs_input_dir, bucket_name=bucket_name)
+
+input_chunk_length = 13
+output_chunk_length = 13
+model_name="TSMixer"
+data_version = "4.0"
+bucket_name = "21"
+exp_name = f"TSMixerModel_icl={input_chunk_length}"
+base_input_dir = Path("/app/notebooks/Saurav/electronics/DL_exp/")
+hdfs_input_dir = f"/data/Archive/Saurav/digital/phase1/forecasting_data/version={data_version}/bucket={bucket_name}/"
+loading_training_predictions(input_chunk_length=input_chunk_length, output_chunk_length=output_chunk_length, full_training=True, model_name=model_name, data_version=data_version, exp_name=exp_name, base_input_dir=base_input_dir,
+                             hdfs_input_dir=hdfs_input_dir, bucket_name=bucket_name)
