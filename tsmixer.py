@@ -34,6 +34,13 @@ fs = pa.hdfs.connect()
 from darts import TimeSeries
 from tqdm.notebook import tqdm
 
+def give_previous_date(date, week_delta):
+    from datetime import datetime, timedelta
+    current_date = datetime.strptime(date, '%Y-%m-%d')
+    prev_date = current_date - timedelta(weeks=week_delta)
+    prev_date_str = prev_date.strftime('%Y-%m-%d')
+    return prev_date
+
 def cross_join(df1, df2):
     df1["key"] = 1
     df2["key"] = 1
@@ -53,9 +60,16 @@ def split_series(series, train_start: str, train_end: str, test_start: str, test
         
     return train, test
 
+input_chunk_length = 52
+output_chunk_length = 13
+use_static_covariates = False
+# max_samples_per_ts = 14
+num_loader_workers = 32
+full_training = True
+
 model_name="TSMixer"
-data_version = "2.0"
-exp_name = "TSMixerModel"
+data_version = "3.0"
+exp_name = f"TSMixerModel_icl={input_chunk_length}"
 
 base_input_dir = Path("/app/notebooks/Saurav/electronics/DL_exp/")
 input_dir = base_input_dir / f"dataset/version={data_version}"
@@ -81,13 +95,13 @@ df_sales_rd_c1['month'] = df_sales_rd_c1['date'].dt.month
 past_covariates_columns = ['total_avg_discount']
 future_covariates_columns = ['year', 'month']
 
-ts = TimeSeries.from_group_dataframe(df_sales_rd_c1, time_col='date', value_cols=['total_quantity'], freq='W-MON', 
+ts = TimeSeries.from_group_dataframe(df_sales_rd_c1, time_col='date', value_cols=['total_quantity'], freq='W-MON', fill_missing_dates=True,
                                      group_cols=['article_id','pin_code', 'channel'], n_jobs=-1,verbose=True)
 
-past_covariates_ts = TimeSeries.from_group_dataframe(df_sales_rd_c1, time_col='date', value_cols=past_covariates_columns, freq='W-MON', 
+past_covariates_ts = TimeSeries.from_group_dataframe(df_sales_rd_c1, time_col='date', value_cols=past_covariates_columns, freq='W-MON', fill_missing_dates=True,
                                      group_cols=['article_id','pin_code', 'channel'], n_jobs=-1,verbose=True)
 
-future_covariates_ts = TimeSeries.from_group_dataframe(df_sales_rd_c1, time_col='date', value_cols=future_covariates_columns, freq='W-MON', 
+future_covariates_ts = TimeSeries.from_group_dataframe(df_sales_rd_c1, time_col='date', value_cols=future_covariates_columns, freq='W-MON', fill_missing_dates=True,
                                      group_cols=['article_id','pin_code', 'channel'], n_jobs=-1,verbose=True)
 
 train_start, train_end, test_start, test_end = "2022-08-08", "2024-03-31", "2024-04-01", "2024-06-30"
@@ -99,6 +113,8 @@ past_covariates_train, past_covariates_val = split_series(past_covariates_ts, tr
 
 future_covariates_train, future_covariates_val = split_series(future_covariates_ts, train_start=train_start, train_end=train_end, 
                                                               test_start=test_start, test_end=test_end,)
+future_covariates_train_prediction_time, future_covariates_val_prediction_time = split_series(future_covariates_ts, train_start=train_start, train_end=train_end, 
+                                                              test_start=give_previous_date(test_start, input_chunk_length), test_end=test_end,)
 
 print(train[1].time_index, val[1].time_index)
 
@@ -106,11 +122,11 @@ def create_model_params(input_chunk_length: int, output_chunk_length: int, full_
                         work_dir=None,) -> Dict: 
     
     
-    early_stopper = EarlyStopping(monitor="val_loss", patience=2, min_delta=1e-3, mode="min",)
+    early_stopper = EarlyStopping(monitor="train_loss", patience=5, min_delta=1e-3, mode="min",)
     if full_training:
         limit_train_batches = None
         limit_val_batches = None
-        max_epochs = 3
+        max_epochs = 20
         batch_size = 128
     else:
         limit_train_batches = 1
@@ -183,13 +199,6 @@ def create_model_params(input_chunk_length: int, output_chunk_length: int, full_
         "work_dir": work_dir,
     }
 
-input_chunk_length = 39
-output_chunk_length = 13
-use_static_covariates = False
-max_samples_per_ts = 14
-num_loader_workers = 32
-full_training = True
-
 model = TSMixerModel(**create_model_params(input_chunk_length=input_chunk_length, output_chunk_length=output_chunk_length, 
                                            full_training=full_training, work_dir=output_dir.as_posix(),),
                      use_static_covariates=use_static_covariates, model_name=model_name,)
@@ -198,19 +207,20 @@ model.fit(
     series=train,
     past_covariates=past_covariates_train,
     future_covariates=future_covariates_train,
-    val_series=val,
-    val_past_covariates=past_covariates_val,
-    val_future_covariates=future_covariates_val,
+    # val_series=val,
+    # val_past_covariates=past_covariates_val,
+    # val_future_covariates=future_covariates_val,
     verbose=True,
-    max_samples_per_ts=max_samples_per_ts,
+    # max_samples_per_ts=max_samples_per_ts,
     num_loader_workers=num_loader_workers,
 )
+# model = model.load_from_checkpoint(model.model_name, model.work_dir)
 
 val_preds = model.predict(
-    n=52,
+    n=13,
     series=train,
     past_covariates=past_covariates_train,
-    future_covariates=future_covariates_val,
+    future_covariates=future_covariates_val_prediction_time,
     batch_size=1024,
     n_jobs=-1,
     num_samples=50,
@@ -226,9 +236,10 @@ date = pd.DataFrame({'date': date_range,
                     })
 
 predicted_df = []
-for series_ in tqdm(val_preds):
+for series_ in tqdm(val_preds, desc="Processing Prediction"):
     # print(series_.static_covariates.reset_index(drop=True), series_.with_values)
-    pred = pd.DataFrame(series.all_values().reshape(52, 1), columns=['prediction'])
+    # pred = pd.DataFrame(series_.quantile_df(0.5).reset_index(), columns=['prediction'])
+    pred = pd.DataFrame(list(series_.quantile_df(.5).reset_index()['total_quantity_0.5']), columns=['prediction'])
     prediction_ = cross_join(series_.static_covariates.reset_index(drop=True), pred)
     prediction_ = pd.concat([prediction_, date], axis = 1)
     predicted_df.append(prediction_)
@@ -236,6 +247,7 @@ for series_ in tqdm(val_preds):
 
 predicted_df = pd.concat(predicted_df)
 predicted_df["prediction"] = predicted_df["prediction"].clip(lower=0)
+predicted_df["prediction"] =np.ceil(predicted_df["prediction"])
 predicted_df["algorithm"] = model_name
 predicted_df["date"] = test_start
 
